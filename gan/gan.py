@@ -1,18 +1,14 @@
 import argparse
 import os
+
 import numpy as np
-import math
-
+import torch
+import torch.nn as nn
 import torchvision.transforms as transforms
-from torchvision.utils import save_image
-
+from torch.autograd import Variable
 from torch.utils.data import DataLoader
 from torchvision import datasets
-from torch.autograd import Variable
-
-import torch.nn as nn
-import torch.nn.functional as F
-import torch
+from torchvision.utils import save_image
 
 os.makedirs("images", exist_ok=True)
 
@@ -39,10 +35,14 @@ class Generator(nn.Module):
     def __init__(self):
         super(Generator, self).__init__()
 
+        # 内部函数,一个块包含 全连接层->BN层（根据传入参数判断是否需要）-> LeakyReLU层
         def block(in_feat, out_feat, normalize=True):
             layers = [nn.Linear(in_feat, out_feat)]
             if normalize:
+                # 0.8: 动量值，用于计算运行时的平均值和方差。动量值通常设置在0到1之间。较高的值会给予过去的统计信息更多的权重，使得平均值和方差的计算更加稳定。
                 layers.append(nn.BatchNorm1d(out_feat, 0.8))
+            #     当输入值小于0时，LeakyReLU函数会返回0.2 * input。
+            # 这个参数决定了是否在原地进行操作。如果设置为True，那么在进行前向计算时，它会直接修改输入数据，而不需要额外的空间来存储输出。这可以节省一些内存，但可能会覆盖原始数据。
             layers.append(nn.LeakyReLU(0.2, inplace=True))
             return layers
 
@@ -51,13 +51,19 @@ class Generator(nn.Module):
             *block(128, 256),
             *block(256, 512),
             *block(512, 1024),
+            # 输入1024   输出: 图片的总像素数（图像形状的乘积）
             nn.Linear(1024, int(np.prod(img_shape))),
             nn.Tanh()
         )
 
     def forward(self, z):
         img = self.model(z)
+        # torch.Size([64, 784])
+        # 64为batch_size(也就是z的batch_size,这里我们前面设置的是64) 784 为图像转换为一维向量大小  28*28=784 model的最后一个线性层输出的是np.prod(img_shape)
+        print(img.size())
+        # view()函数用于改变张量的形状   torch.Size([64, 1, 28, 28])
         img = img.view(img.size(0), *img_shape)
+        print(f'after view() shape is {img.size()}')
         return img
 
 

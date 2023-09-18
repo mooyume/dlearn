@@ -8,8 +8,7 @@ print(np.prod((3, 3, 3)))
 import torch
 
 # 创建一个形状为(3, 32, 32)的张量
-img = torch.randn(3, 32, 32)
+img = torch.randn(1, 2, 28, 28)
 
-# 使用size()函数获取张量的形状
-print(img.size(1))  # 输出：torch.Size([3, 32, 32])
-
+img_flat = img.view(img.size(0), img.size(1), -1)
+print(img_flat.size())

@@ -81,19 +81,24 @@ class Discriminator(nn.Module):
         )
 
     def forward(self, img):
+        # 第一个维度为 img.size(0)，将其他维度自动展开为一维 此处img.size()为torch.Size([64, 1, 28, 28]),img_flat.size()=torch.Size([64, 784])
+        print(f'D --> img.size()=:{img.size()}')
         img_flat = img.view(img.size(0), -1)
+        print(f'D --> img_flat.size()=:{img_flat.size()}')
         validity = self.model(img_flat)
 
         return validity
 
 
-# Loss function
+# Loss function    二元交叉熵损失函数
+# 用于衡量生成器生成的图像和真实图像之间的差异。
 adversarial_loss = torch.nn.BCELoss()
 
 # Initialize generator and discriminator
 generator = Generator()
 discriminator = Discriminator()
 
+# 使用GPU计算
 if cuda:
     generator.cuda()
     discriminator.cuda()
@@ -106,18 +111,33 @@ dataloader = torch.utils.data.DataLoader(
         "../../data/mnist",
         train=True,
         download=True,
+        #
         transform=transforms.Compose(
-            [transforms.Resize(opt.img_size), transforms.ToTensor(), transforms.Normalize([0.5], [0.5])]
+            [
+                # 调整图像大小
+                transforms.Resize(opt.img_size),
+                # 这个操作将PIL Image或NumPy ndarray转换为torch.FloatTensor，并将图像的形状从(H,W,C)变为(C,H,W)，其中H是高度，W是宽度，C是通道数。
+                # 这是因为PyTorch中的卷积操作要求输入的形状为(C,H,W)。
+                transforms.ToTensor(),
+                # 对图像进行归一化。它需要两个参数，分别是均值和标准差。在这里，均值和标准差都设置为0.5，所以这个操作会将图像的像素值从[0,1]变为[-1,1]。
+                transforms.Normalize([0.5], [0.5])]
         ),
     ),
     batch_size=opt.batch_size,
+    # 在每个训练周期开始时打乱数据
     shuffle=True,
 )
 
 # Optimizers
-optimizer_G = torch.optim.Adam(generator.parameters(), lr=opt.lr, betas=(opt.b1, opt.b2))
+optimizer_G = torch.optim.Adam(
+    # 生成器的所有可学习参数
+    generator.parameters(),
+    # 上面指定的学习率
+    lr=opt.lr,
+    # 设置了Adam优化器的两个超参数，这两个参数控制了梯度的指数加权平均的衰减率。
+    betas=(opt.b1, opt.b2))
 optimizer_D = torch.optim.Adam(discriminator.parameters(), lr=opt.lr, betas=(opt.b1, opt.b2))
-
+# 根据是否存在cuda来选择合适的张量类型
 Tensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
 
 # ----------
@@ -131,24 +151,26 @@ for epoch in range(opt.n_epochs):
         valid = Variable(Tensor(imgs.size(0), 1).fill_(1.0), requires_grad=False)
         fake = Variable(Tensor(imgs.size(0), 1).fill_(0.0), requires_grad=False)
 
-        # Configure input
+        # Configure input  将图像(真实图像)转换为适当的（GPU or CPU）张量
         real_imgs = Variable(imgs.type(Tensor))
 
         # -----------------
         #  Train Generator
         # -----------------
 
+        # 清除生成器优化器中的梯度
         optimizer_G.zero_grad()
 
-        # Sample noise as generator input
+        # Sample noise as generator input  生成随机噪音z
         z = Variable(Tensor(np.random.normal(0, 1, (imgs.shape[0], opt.latent_dim))))
 
-        # Generate a batch of images
+        # Generate a batch of images  根据z生成一批图像
         gen_imgs = generator(z)
 
-        # Loss measures generator's ability to fool the discriminator
+        # Loss measures generator's ability to fool the discriminator   计算判别器的判别结构与真实标签之间的二元交叉熵损失
         g_loss = adversarial_loss(discriminator(gen_imgs), valid)
 
+        # 反向传播误差并更新生成器的参数。
         g_loss.backward()
         optimizer_G.step()
 
